@@ -1,0 +1,12 @@
+# Databricks App Configuration
+# React + Flask application
+
+command:
+  - "python"
+  - "backend/main.py"
+
+env:
+  - name: MLFLOW_TRACKING_URI
+    value: databricks
+  - name: PYTHONUNBUFFERED
+    value: "1"

@@ -1,0 +1,7 @@
+# Flask backend for DAO AI Arena
+flask>=3.0.0
+flask-cors>=4.0.0
+databricks-sdk>=0.35.0
+python-dotenv>=1.0.0
+requests>=2.32.0
+mlflow>=2.10.0

@@ -1,0 +1,64 @@
+# Databricks Asset Bundle configuration for DAO AI Arena
+# See: https://docs.databricks.com/dev-tools/bundles/
+
+bundle:
+  name: dao-ai-arena
+
+# Variable definitions
+variables:
+  mlflow_experiment_name:
+    description: "MLFlow experiment name for tracing"
+    default: "/Shared/dao-ai-arena"
+
+# Workspace-level resources
+resources:
+  # MLFlow Experiment for tracking traces
+  experiments:
+    dao_ai_arena_experiment:
+      name: ${var.mlflow_experiment_name}
+      permissions:
+        - level: CAN_MANAGE
+          group_name: users
+
+  # Databricks App deployment
+  apps:
+    dao_ai_arena:
+      name: dao-ai-arena
+      description: |
+        Compare latency and user experience between AI agents deployed
+        in Model Serving vs Databricks Apps. Features side-by-side battle
+        mode, MLFlow tracing, and streaming support.
+      source_code_path: .
+      # Enable on-behalf-of-user authentication
+      # These scopes allow the app to access Databricks APIs on behalf of the user
+      # Reference: https://learn.microsoft.com/en-us/azure/databricks/dev-tools/databricks-apps/auth#user-authorization
+      # Note: WorkspaceClient APIs (like Apps) don't require user_api_scopes
+      user_api_scopes:
+        - sql                         # Required for MLflow experiment queries
+        - serving.serving-endpoints   # Required to list and query Model Serving endpoints
+      permissions:
+        - level: CAN_MANAGE
+          group_name: users
+
+# Default target
+targets:
+  default:
+    mode: development
+    default: true
+
+# Sync configuration - files to upload to workspace
+sync:
+  include:
+    - "app.yaml"
+    - "requirements.txt"
+    - "backend/**"
+  exclude:
+    - ".venv/**"
+    - "__pycache__/**"
+    - "*.pyc"
+    - ".git/**"
+    - "frontend/**"
+    - ".databricks/**"
+    - "node_modules/**"
+    - "*.md"
+    - "deploy.sh"
