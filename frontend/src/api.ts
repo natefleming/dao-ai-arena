@@ -66,7 +66,8 @@ export async function invokeEndpointStreaming(
   onChunk: (chunk: string) => void,
   onMetadata: (metadata: StreamingMetadata) => void,
   customInput?: string,
-  onFallback?: (message: string) => void
+  onFallback?: (message: string) => void,
+  threadId?: string,
 ): Promise<{ latency_ms: number }> {
   const startTime = Date.now();
   
@@ -83,6 +84,13 @@ export async function invokeEndpointStreaming(
     } catch (e) {
       console.error('Failed to parse custom input:', e);
     }
+  }
+
+  // Merge thread_id for HITL conversation continuity
+  if (threadId) {
+    if (!body.custom_input) body.custom_input = {};
+    if (!body.custom_input.configurable) body.custom_input.configurable = {};
+    body.custom_input.configurable.thread_id = threadId;
   }
   
   try {

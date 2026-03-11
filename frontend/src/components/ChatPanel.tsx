@@ -196,6 +196,7 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({
   const [fallbackMessage, setFallbackMessage] = useState<string | null>(null);
   const [expandedTraceIndex, setExpandedTraceIndex] = useState<number | null>(null);
   const [expandedOutputsIndex, setExpandedOutputsIndex] = useState<number | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -269,10 +270,17 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({
           setFallbackMessage(fallbackMsg);
           // Clear after 3 seconds
           setTimeout(() => setFallbackMessage(null), 3000);
-        }
+        },
+        threadId ?? undefined,
       );
 
       const estimatedTokens = Math.ceil(accumulatedContent.length / 4);
+
+      // Extract thread_id from custom_outputs for HITL conversation continuity
+      const configurable = metadata.custom_outputs?.configurable as Record<string, unknown> | undefined;
+      if (configurable?.thread_id) {
+        setThreadId(configurable.thread_id as string);
+      }
 
       setMessages((prev) => {
         const updated = [...prev];
