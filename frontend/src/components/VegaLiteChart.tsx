@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import embed, { VisualizationSpec } from 'vega-embed';
+import embed, { VisualizationSpec, Result } from 'vega-embed';
 
 interface VegaLiteChartProps {
   spec: VisualizationSpec;
@@ -7,19 +7,37 @@ interface VegaLiteChartProps {
 
 export default function VegaLiteChart({ spec }: VegaLiteChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     setError(null);
+
+    if (resultRef.current) {
+      resultRef.current.finalize();
+      resultRef.current = null;
+    }
+
     embed(containerRef.current, spec, {
       actions: { export: true, source: false, compiled: false, editor: false },
       renderer: 'svg',
       theme: 'dark',
-    }).catch((err) => {
-      setError(err instanceof Error ? err.message : 'Failed to render chart');
-    });
+    })
+      .then((result) => {
+        resultRef.current = result;
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to render chart');
+      });
+
+    return () => {
+      if (resultRef.current) {
+        resultRef.current.finalize();
+        resultRef.current = null;
+      }
+    };
   }, [spec]);
 
   if (error) {
@@ -31,8 +49,8 @@ export default function VegaLiteChart({ spec }: VegaLiteChartProps) {
   }
 
   return (
-    <div className="mt-2 border border-gray-700 rounded-lg overflow-hidden bg-gray-900/50">
-      <div ref={containerRef} className="p-2" />
+    <div className="mt-2 w-full border border-gray-700 rounded-lg overflow-hidden bg-gray-900/50">
+      <div ref={containerRef} className="w-full p-2" />
     </div>
   );
 }
