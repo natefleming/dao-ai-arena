@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Endpoint, ChatMessage } from '../api';
 import TraceViewer from './TraceViewer';
+import VegaLiteChart from './VegaLiteChart';
 
 interface ChatPanelProps {
   endpoint: Endpoint;
@@ -424,6 +425,13 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({
                         Generating...
                       </div>
                     ) : null}
+
+                    {/* Visualizations from custom_outputs */}
+                    {msg.custom_outputs &&
+                      Array.isArray((msg.custom_outputs as Record<string, unknown>).visualizations) &&
+                      ((msg.custom_outputs as Record<string, unknown>).visualizations as Array<{ spec: object }>).map((viz, vizIdx) => (
+                        <VegaLiteChart key={vizIdx} spec={viz.spec as any} />
+                      ))}
 
                     {/* Metrics Row */}
                     {msg.content && (msg.ttft || msg.latency) && (
