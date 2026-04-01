@@ -285,8 +285,18 @@ def list_databricks_apps():
         return jsonify({'error': str(e)}), 500
 
 
-def get_experiment_id_for_endpoint(endpoint_id: str, endpoint_type: str) -> str | None:
-    """Get the MLflow experiment ID associated with an endpoint"""
+def get_experiment_id_for_endpoint(endpoint_id: str, endpoint_type: str, app_obj=None) -> str | None:
+    """Get the MLflow experiment ID associated with an endpoint.
+    
+    For model_serving endpoints, looks up the experiment via the served model's
+    training run in MLflow. For databricks_app endpoints, extracts the experiment
+    ID from the app's resources (set during dao-ai deployment).
+    
+    Args:
+        endpoint_id: The endpoint or app name.
+        endpoint_type: Either 'model_serving' or 'databricks_app'.
+        app_obj: Pre-fetched App object to avoid duplicate SDK calls.
+    """
     try:
         if endpoint_type == 'model_serving':
             w = get_databricks_client()
@@ -325,9 +335,20 @@ def get_experiment_id_for_endpoint(endpoint_id: str, endpoint_type: str) -> str 
             return experiment_id
         
         elif endpoint_type == 'databricks_app':
-            # For apps, we might need to look at the app's configuration
-            # or metadata to find associated experiment
-            # For now, return None and rely on session-based search
+            app = app_obj
+            if not app:
+                w = get_databricks_client()
+                app = w.apps.get(endpoint_id)
+
+            if app and app.resources:
+                for resource in app.resources:
+                    if resource.experiment and resource.experiment.experiment_id:
+                        experiment_id = resource.experiment.experiment_id
+                        print(f"Found experiment ID from app resource '{resource.name}': {experiment_id}")
+                        return experiment_id
+                print(f"No experiment resource found in app '{endpoint_id}' resources")
+            else:
+                print(f"No resources found for app '{endpoint_id}'")
             return None
         
         return None
@@ -356,19 +377,21 @@ def stream_endpoint():
     auth_headers = get_databricks_auth_headers()
     workspace_host = get_workspace_host()
     
-    # Get experiment ID for this endpoint (for trace search)
-    experiment_id = get_experiment_id_for_endpoint(endpoint_id, endpoint_type)
-    
-    # For Databricks Apps, we also need to get the app URL now
+    # For Databricks Apps, fetch the app object once and reuse for both
+    # experiment ID lookup and URL extraction
     app_url = None
+    app_obj = None
     if endpoint_type == 'databricks_app':
         try:
             w = get_databricks_client()
-            app = w.apps.get(endpoint_id)
-            if app and app.url:
-                app_url = app.url.rstrip('/') + '/invocations'
+            app_obj = w.apps.get(endpoint_id)
+            if app_obj and app_obj.url:
+                app_url = app_obj.url.rstrip('/') + '/invocations'
         except Exception as e:
             print(f"Error getting app URL: {e}")
+    
+    # Get experiment ID for this endpoint (for trace search)
+    experiment_id = get_experiment_id_for_endpoint(endpoint_id, endpoint_type, app_obj=app_obj)
     
     def generate():
         """Generator function for SSE streaming"""

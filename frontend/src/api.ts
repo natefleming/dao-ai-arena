@@ -3,6 +3,13 @@
  */
 import axios from 'axios';
 
+class AgentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentError';
+  }
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
@@ -32,6 +39,7 @@ export interface InvokeResponse {
   endpoint_type: string;
   endpoint_id: string;
   trace_id?: string;
+  experiment_id?: string;
   error?: string;
 }
 
@@ -137,26 +145,28 @@ export async function invokeEndpointStreaming(
           continue;
         }
         
+        let parsed: any;
         try {
-          const parsed = JSON.parse(data);
-          
-          if (parsed.type === 'content') {
-            onChunk(parsed.content);
-          } else if (parsed.type === 'metadata') {
-            ttft_ms = parsed.ttft_ms;
-            trace_id = parsed.trace_id;
-            experiment_id = parsed.experiment_id;
-            onMetadata({ 
-              ttft_ms, 
-              trace_id,
-              experiment_id,
-              custom_outputs: parsed.custom_outputs 
-            });
-          } else if (parsed.type === 'error') {
-            throw new Error(parsed.error || 'Streaming error');
-          }
+          parsed = JSON.parse(data);
         } catch (e) {
           console.error('Error parsing SSE data:', e, data);
+          continue;
+        }
+        
+        if (parsed.type === 'content') {
+          onChunk(parsed.content);
+        } else if (parsed.type === 'metadata') {
+          ttft_ms = parsed.ttft_ms;
+          trace_id = parsed.trace_id;
+          experiment_id = parsed.experiment_id;
+          onMetadata({ 
+            ttft_ms, 
+            trace_id,
+            experiment_id,
+            custom_outputs: parsed.custom_outputs 
+          });
+        } else if (parsed.type === 'error') {
+          throw new AgentError(parsed.error || 'Streaming error');
         }
       }
     }
@@ -165,23 +175,26 @@ export async function invokeEndpointStreaming(
     return { latency_ms };
     
   } catch (error: any) {
+    // Agent-reported errors (e.g. permission denied, USE CATALOG failures)
+    // must surface to the UI rather than silently falling back to batch mode.
+    if (error instanceof AgentError) {
+      throw error;
+    }
+
     console.warn('Streaming failed, falling back to non-streaming:', error.message);
     
-    // Notify about fallback
     if (onFallback) {
       onFallback('⚠️ Streaming unavailable, using batch mode...');
     }
     
-    // Fallback to non-streaming
     const fallbackResponse = await invokeEndpoint(endpointId, endpointType, messages);
     
-    // Send response as single chunk
     onChunk(fallbackResponse.response);
     
-    // Send metadata
     onMetadata({
       ttft_ms: fallbackResponse.ttft_ms,
       trace_id: fallbackResponse.trace_id,
+      experiment_id: fallbackResponse.experiment_id,
     });
     
     const latency_ms = Date.now() - startTime;
